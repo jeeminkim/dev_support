@@ -8,6 +8,7 @@ import SettingsModal from '@/components/SettingsModal';
 import { getSettings, saveDraft, getDraft, getRecentResults } from '@/lib/storage';
 import { TaskType, DbOption, RecentResult } from '@/lib/types';
 import { Settings as SettingsIcon, Code2, AlertTriangle, History, Clock } from 'lucide-react';
+import { buildFollowUpPrompt, FOLLOW_UP_MAX_COUNT } from '@/lib/utils/promptUtils';
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
@@ -16,7 +17,7 @@ export default function Home() {
   const [recentTasks, setRecentTasks] = useState<RecentResult[]>([]);
   
   const [lastDbOption, setLastDbOption] = useState<DbOption | undefined>(undefined);
-  const [followUpCount, setFollowUpCount] = useState(0); // 연속 수정 횟수
+  const [followUpCount, setFollowUpCount] = useState<number>(0);
   
   const { generate, isLoading, error, result } = useGenerate();
 
@@ -66,16 +67,7 @@ export default function Home() {
     const newCount = followUpCount + 1;
     setFollowUpCount(newCount);
     
-    let newPrompt = "";
-    
-    if (newCount >= 5) {
-      // 5회 이상 시 프롬프트 요약 재구성
-      const baseContent = result.content || result.explanation || '';
-      newPrompt = `[현재 결과 기준]\n${baseContent}\n\n[추가 수정 요청]\n${followUpText}`;
-    } else {
-      // 5회 미만 시 누적 방식 유지
-      newPrompt = `[기존 업무 내용]\n${prompt}\n\n[추가 수정 요청 사항]\n${followUpText}`;
-    }
+    const newPrompt = buildFollowUpPrompt(prompt, followUpText, result, newCount);
     
     setPrompt(newPrompt); 
     generate(newPrompt, result.taskType, lastDbOption);
@@ -125,7 +117,7 @@ export default function Home() {
               <div className="p-4 bg-orange-50 border border-orange-200 rounded-md animate-in fade-in flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
                 <div className="text-orange-800 text-xs font-semibold leading-relaxed">
-                  수정 요청이 연속으로 많이 누적되었습니다. 컨텍스트가 5회 이상 과도하게 길어지면 품질이 저하될 수 있으므로 만족스럽지 않다면 현재 결과 복사 후 새 작업으로 시작하는 것을 권장합니다.
+                  수정 요청이 연속으로 많이 누적되었습니다. 컨텍스트가 {FOLLOW_UP_MAX_COUNT}회 이상 과도하게 길어지면 품질이 저하될 수 있으므로 만족스럽지 않다면 현재 결과 복사 후 새 작업으로 시작하는 것을 권장합니다.
                 </div>
               </div>
             )}
