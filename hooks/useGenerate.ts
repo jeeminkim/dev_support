@@ -1,14 +1,23 @@
 "use client";
 import { useState } from 'react';
-import { TaskType, GenerateResponse, DbOption } from '@/lib/types';
+import { TaskType, GenerateResponse, DbType } from '@/lib/types';
 import { getSettings, saveRecentResult } from '@/lib/storage';
+
+export type GenerateOptions = {
+  dbType?: DbType;
+  schemaContext?: string;
+};
 
 export const useGenerate = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GenerateResponse | null>(null);
 
-  const generate = async (prompt: string, taskType: TaskType, dbOption?: DbOption) => {
+  const generate = async (
+    prompt: string,
+    taskType: TaskType,
+    options?: GenerateOptions
+  ) => {
     setIsLoading(true);
     setError(null);
 
@@ -28,18 +37,25 @@ export const useGenerate = () => {
     }
 
     try {
+      const body: Record<string, unknown> = {
+        prompt,
+        taskType,
+        provider: 'gemini',
+        apiKey,
+      };
+
+      if (taskType === 'sql') {
+        body.dbType = options?.dbType ?? 'postgresql';
+        body.schemaContext =
+          typeof options?.schemaContext === 'string' ? options.schemaContext : '';
+      }
+
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          prompt,
-          taskType,
-          provider: 'gemini',
-          apiKey,
-          dbOption
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -50,7 +66,6 @@ export const useGenerate = () => {
 
       setResult(data);
 
-      // 성공 시 스토리지에 최근 결과 저장
       saveRecentResult({
         taskType: data.taskType,
         title: data.title || prompt.substring(0, 30) + '...',

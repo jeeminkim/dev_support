@@ -1,25 +1,34 @@
 import { Provider } from './base';
 import { GenerateRequest, GenerateResponse } from '../types';
-import { getSystemPrompt } from '../prompts';
+import { getSystemPrompt, buildSqlUserPrompt } from '../prompts';
 import { ApiError, logDevError } from '../utils';
 import { extractJsonObject, normalizeGenerateResponse } from '../parsers/generateResponse';
 
 export class GeminiProvider implements Provider {
   async generate(request: GenerateRequest): Promise<GenerateResponse> {
-    const { prompt, taskType, apiKey, dbOption } = request;
-    
+    const { prompt, taskType, apiKey, dbType, schemaContext } = request;
+
     if (!apiKey) {
       throw new ApiError('API Key가 설정되지 않았습니다.', 401);
     }
 
-    const systemPrompt = getSystemPrompt(taskType, dbOption);
-    
+    const systemPrompt = getSystemPrompt(taskType);
+
+    const userText =
+      taskType === 'sql'
+        ? buildSqlUserPrompt(
+            prompt,
+            dbType ?? 'postgresql',
+            typeof schemaContext === 'string' ? schemaContext : ''
+          )
+        : `사용자 요청:\n${prompt}`;
+
     try {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n사용자 요청: ${prompt}` }] }],
+          contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userText}` }] }],
           generationConfig: { temperature: 0.2 }
         })
       });
@@ -36,9 +45,9 @@ export class GeminiProvider implements Provider {
 
       const data = await res.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      
+
       if (!text) throw new ApiError('LLM에서 빈 응답을 반환했습니다.', 500);
-      
+
       const parsed = extractJsonObject(text);
       return normalizeGenerateResponse(parsed, taskType);
 

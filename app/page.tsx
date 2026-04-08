@@ -6,19 +6,22 @@ import ActionButtons from '@/components/ActionButtons';
 import ResultPanel from '@/components/ResultPanel';
 import SettingsModal from '@/components/SettingsModal';
 import { getSettings, saveDraft, getDraft, getRecentResults } from '@/lib/storage';
-import { TaskType, DbOption, RecentResult } from '@/lib/types';
+import { TaskType, DbType, RecentResult } from '@/lib/types';
 import { Settings as SettingsIcon, Code2, AlertTriangle, History, Clock } from 'lucide-react';
 import { buildFollowUpPrompt, FOLLOW_UP_MAX_COUNT } from '@/lib/utils/promptUtils';
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
+  const [schemaContext, setSchemaContext] = useState('');
+  const [showSqlSchema, setShowSqlSchema] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [recentTasks, setRecentTasks] = useState<RecentResult[]>([]);
-  
-  const [lastDbOption, setLastDbOption] = useState<DbOption | undefined>(undefined);
+
+  const [lastDbType, setLastDbType] = useState<DbType>('postgresql');
+  const [lastSchemaContext, setLastSchemaContext] = useState('');
   const [followUpCount, setFollowUpCount] = useState<number>(0);
-  
+
   const { generate, isLoading, error, result } = useGenerate();
 
   useEffect(() => {
@@ -42,36 +45,48 @@ export default function Home() {
     if (isReady) saveDraft(prompt);
   }, [prompt, isReady]);
 
-  // 새로운 결과 생성될 때마다 최근 기록 Refresh
   useEffect(() => {
     if (!result) return;
     queueMicrotask(() => setRecentTasks(getRecentResults()));
   }, [result]);
 
   const handleDataCleared = () => {
-    // 모든 화면 상태 리셋
     setPrompt('');
+    setSchemaContext('');
+    setShowSqlSchema(false);
     setRecentTasks([]);
     setFollowUpCount(0);
-    // 참고: useGenerate.ts 내부 상태 훅을 명시적으로 컨트롤하진 않으나 새로고침을 권장하는 UX가 모달 내부에 있음
   };
 
-  const handleGenerate = (type: TaskType, dbOption?: DbOption) => {
-    setLastDbOption(dbOption);
-    setFollowUpCount(0); // 새 작업 시작 시 카운터 초기화
-    generate(prompt, type, dbOption);
+  const handleGenerate = (type: TaskType, dbType?: DbType) => {
+    setFollowUpCount(0);
+    if (type === 'sql') {
+      const resolvedDb = dbType ?? 'postgresql';
+      setLastDbType(resolvedDb);
+      setLastSchemaContext(schemaContext);
+      generate(prompt, type, { dbType: resolvedDb, schemaContext });
+    } else {
+      generate(prompt, type);
+    }
   };
 
   const handleFollowUp = (followUpText: string) => {
     if (!result) return;
-    
+
     const newCount = followUpCount + 1;
     setFollowUpCount(newCount);
-    
+
     const newPrompt = buildFollowUpPrompt(prompt, followUpText, result, newCount);
-    
-    setPrompt(newPrompt); 
-    generate(newPrompt, result.taskType, lastDbOption);
+
+    setPrompt(newPrompt);
+    if (result.taskType === 'sql') {
+      generate(newPrompt, result.taskType, {
+        dbType: lastDbType,
+        schemaContext: lastSchemaContext,
+      });
+    } else {
+      generate(newPrompt, result.taskType);
+    }
   };
 
   if (!isReady) return null;
@@ -84,7 +99,7 @@ export default function Home() {
             <div className="w-8 h-8 bg-blue-600 text-white rounded-md flex items-center justify-center shadow-sm">
               <Code2 className="w-5 h-5" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-800">K-Dev Assistant</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-800">dev_support</h1>
           </div>
           <button
             onClick={() => setIsSettingsOpen(true)}
@@ -103,17 +118,27 @@ export default function Home() {
               <div className="space-y-1 mb-8 border-b border-slate-100 pb-5">
                 <h2 className="text-2xl font-bold text-slate-800">새 작업 시작</h2>
                 <p className="text-sm text-slate-500 max-w-xl">
-                  요구사항을 자연어로 입력하면 순서도, SQL, TypeScript 코드로 뼈대를 생성합니다.
+                  자연어로 업무를 설명하면 순서도(Mermaid), SQL, TypeScript 초안을 만들어 줍니다. SQL은 스키마와 조인 관계를 함께 주면 더 정확합니다.
                 </p>
               </div>
 
               <div className="space-y-6">
-                <PromptInput value={prompt} onChange={setPrompt} />
-                <ActionButtons onGenerate={handleGenerate} isLoading={isLoading} />
+                <PromptInput
+                  value={prompt}
+                  onChange={setPrompt}
+                  schemaContext={schemaContext}
+                  onSchemaChange={setSchemaContext}
+                  showSchema={showSqlSchema}
+                />
+                <ActionButtons
+                  onGenerate={handleGenerate}
+                  isLoading={isLoading}
+                  showSqlSchema={showSqlSchema}
+                  onToggleSqlSchema={() => setShowSqlSchema((v) => !v)}
+                />
               </div>
             </div>
-            
-            {/* 컨텍스트 누적 경고 메시지 */}
+
             {followUpCount >= 3 && !isLoading && (
               <div className="p-4 bg-orange-50 border border-orange-200 rounded-md animate-in fade-in flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
@@ -157,9 +182,10 @@ export default function Home() {
                   recentTasks.map((task) => (
                     <button
                       key={task.id}
+                      type="button"
                       onClick={() => {
-                         setPrompt(task.prompt);
-                         setFollowUpCount(0); // 이력 복구 시 새 작업 취급
+                        setPrompt(task.prompt);
+                        setFollowUpCount(0);
                       }}
                       className="w-full text-left p-4 hover:bg-slate-50 transition-colors focus:bg-blue-50 focus:outline-none block group"
                     >
