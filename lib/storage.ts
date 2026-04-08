@@ -1,5 +1,5 @@
-import { logDevError } from '../utils';
-import { RecentResult } from '../types';
+import { logDevError } from './utils';
+import { RecentResult } from './types';
 
 export const STORAGE_KEY_SETTINGS = 'dev_assistant_settings';
 export const STORAGE_KEY_DRAFT = 'dev_assistant_draft';
