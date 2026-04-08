@@ -6,13 +6,15 @@ import ActionButtons from '@/components/ActionButtons';
 import ResultPanel from '@/components/ResultPanel';
 import SettingsModal from '@/components/SettingsModal';
 import { getSettings, saveDraft, getDraft, getRecentResults } from '@/lib/storage';
-import { TaskType, DbType, RecentResult } from '@/lib/types';
+import { TaskType, DbType, RecentResult, DEFAULT_SQL_STYLE_OPTIONS, SqlStyleOptions } from '@/lib/types';
 import { Settings as SettingsIcon, Code2, AlertTriangle, History, Clock } from 'lucide-react';
 import { buildFollowUpPrompt, FOLLOW_UP_MAX_COUNT } from '@/lib/utils/promptUtils';
+import { formatSqlStyleHints } from '@/lib/prompts';
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [schemaContext, setSchemaContext] = useState('');
+  const [sqlStyle, setSqlStyle] = useState<SqlStyleOptions>(DEFAULT_SQL_STYLE_OPTIONS);
   const [showSqlSchema, setShowSqlSchema] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -20,6 +22,7 @@ export default function Home() {
 
   const [lastDbType, setLastDbType] = useState<DbType>('postgresql');
   const [lastSchemaContext, setLastSchemaContext] = useState('');
+  const [lastSqlStyleHints, setLastSqlStyleHints] = useState('');
   const [followUpCount, setFollowUpCount] = useState<number>(0);
 
   const { generate, isLoading, error, result } = useGenerate();
@@ -53,6 +56,7 @@ export default function Home() {
   const handleDataCleared = () => {
     setPrompt('');
     setSchemaContext('');
+    setSqlStyle(DEFAULT_SQL_STYLE_OPTIONS);
     setShowSqlSchema(false);
     setRecentTasks([]);
     setFollowUpCount(0);
@@ -62,9 +66,15 @@ export default function Home() {
     setFollowUpCount(0);
     if (type === 'sql') {
       const resolvedDb = dbType ?? 'postgresql';
+      const hints = formatSqlStyleHints(sqlStyle);
       setLastDbType(resolvedDb);
       setLastSchemaContext(schemaContext);
-      generate(prompt, type, { dbType: resolvedDb, schemaContext });
+      setLastSqlStyleHints(hints);
+      generate(prompt, type, {
+        dbType: resolvedDb,
+        schemaContext,
+        sqlStyleHints: hints,
+      });
     } else {
       generate(prompt, type);
     }
@@ -83,6 +93,7 @@ export default function Home() {
       generate(newPrompt, result.taskType, {
         dbType: lastDbType,
         schemaContext: lastSchemaContext,
+        sqlStyleHints: lastSqlStyleHints,
       });
     } else {
       generate(newPrompt, result.taskType);
@@ -118,7 +129,7 @@ export default function Home() {
               <div className="space-y-1 mb-8 border-b border-slate-100 pb-5">
                 <h2 className="text-2xl font-bold text-slate-800">새 작업 시작</h2>
                 <p className="text-sm text-slate-500 max-w-xl">
-                  자연어로 업무를 설명하면 순서도(Mermaid), SQL, TypeScript 초안을 만들어 줍니다. SQL은 스키마와 조인 관계를 함께 주면 더 정확합니다.
+                  자연어로 업무를 설명하면 순서도(Mermaid), SQL, TypeScript 초안을 만듭니다. SQL은 스키마·조인·옵션을 맞추면 실무에 가깝게 나옵니다.
                 </p>
               </div>
 
@@ -129,6 +140,8 @@ export default function Home() {
                   schemaContext={schemaContext}
                   onSchemaChange={setSchemaContext}
                   showSchema={showSqlSchema}
+                  sqlStyle={sqlStyle}
+                  onSqlStyleChange={setSqlStyle}
                 />
                 <ActionButtons
                   onGenerate={handleGenerate}

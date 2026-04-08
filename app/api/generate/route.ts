@@ -30,6 +30,7 @@ export async function POST(req: Request) {
 
     let dbType: DbType | undefined;
     let schemaContext: string | undefined;
+    let sqlStyleHints: string | undefined;
 
     if (taskType === 'sql') {
       const rawDb = body.dbType;
@@ -49,6 +50,15 @@ export async function POST(req: Request) {
       } else {
         schemaContext = rawSchema;
       }
+
+      const rawHints = body.sqlStyleHints;
+      if (rawHints === undefined || rawHints === null) {
+        sqlStyleHints = '';
+      } else if (typeof rawHints !== 'string') {
+        throw new ApiError('sqlStyleHints는 문자열이어야 합니다.', 400);
+      } else {
+        sqlStyleHints = rawHints;
+      }
     }
 
     const requestPayload: GenerateRequest = {
@@ -56,7 +66,7 @@ export async function POST(req: Request) {
       taskType,
       provider: 'gemini',
       apiKey: body.apiKey as string,
-      ...(taskType === 'sql' ? { dbType, schemaContext } : {}),
+      ...(taskType === 'sql' ? { dbType, schemaContext, sqlStyleHints } : {}),
     };
 
     const provider = new GeminiProvider();

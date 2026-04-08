@@ -6,7 +6,7 @@ import { extractJsonObject, normalizeGenerateResponse } from '../parsers/generat
 
 export class GeminiProvider implements Provider {
   async generate(request: GenerateRequest): Promise<GenerateResponse> {
-    const { prompt, taskType, apiKey, dbType, schemaContext } = request;
+    const { prompt, taskType, apiKey, dbType, schemaContext, sqlStyleHints } = request;
 
     if (!apiKey) {
       throw new ApiError('API Key가 설정되지 않았습니다.', 401);
@@ -19,7 +19,8 @@ export class GeminiProvider implements Provider {
         ? buildSqlUserPrompt(
             prompt,
             dbType ?? 'postgresql',
-            typeof schemaContext === 'string' ? schemaContext : ''
+            typeof schemaContext === 'string' ? schemaContext : '',
+            typeof sqlStyleHints === 'string' ? sqlStyleHints : undefined
           )
         : `사용자 요청:\n${prompt}`;
 

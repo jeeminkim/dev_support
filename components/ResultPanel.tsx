@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { GenerateResponse } from '@/lib/types';
 import CodeBlock from './CodeBlock';
 import MermaidViewer from './MermaidViewer';
-import { AlertCircle, Sparkles, CornerDownRight, Download, Copy, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { AlertCircle, Sparkles, CornerDownRight, Download, Copy, ThumbsUp, ThumbsDown, AlertTriangle } from 'lucide-react';
 import { formatResultAsMarkdown, downloadTextFile } from '@/lib/utils';
 import { saveFeedback } from '@/lib/storage';
 
@@ -13,7 +13,6 @@ interface ResultPanelProps {
   isGenerating: boolean;
 }
 
-// 서브 렌더 컴포넌트 1: Flow 형태 렌더링
 const FlowTaskView = ({ result }: { result: GenerateResponse }) => (
   <>
     {result.mermaidCode && (
@@ -41,12 +40,13 @@ const FlowTaskView = ({ result }: { result: GenerateResponse }) => (
   </>
 );
 
-// 서브 렌더 컴포넌트 2: Code(SQL, TS) 형태 렌더링
-const CodeTaskView = ({ result, isSql }: { result: GenerateResponse, isSql: boolean }) => (
+const CodeTaskView = ({ result, isSql }: { result: GenerateResponse; isSql: boolean }) => (
   <>
     {result.explanation && (
       <section className="bg-slate-50 p-5 rounded-md border border-slate-100 text-slate-700 leading-relaxed whitespace-pre-wrap">
-        <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wider">Explanation</h3>
+        <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wider">
+          {isSql ? '설계·주의·성능 (SQL)' : 'Explanation'}
+        </h3>
         {result.explanation}
       </section>
     )}
@@ -99,9 +99,12 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
     setFeedback(type);
   };
 
+  const hasWarnings = result.warnings && result.warnings.length > 0;
+  const sqlWarningBlock = result.taskType === 'sql' && hasWarnings;
+
   return (
     <div className="mt-8 border-t border-slate-200 pt-8 animate-in fade-in duration-500">
-      
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-3">
           {result.title && <h2 className="text-xl font-bold text-slate-800">{result.title}</h2>}
@@ -112,7 +115,7 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
             </div>
           )}
         </div>
-        
+
         <div className="flex gap-2">
           <button onClick={handleCopyMd} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-md transition-colors">
             <Copy className="w-3.5 h-3.5" />
@@ -124,14 +127,43 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
           </button>
         </div>
       </div>
-      
-      {result.warnings && result.warnings.length > 0 && (
+
+      {sqlWarningBlock && (
+        <div
+          className="mb-6 rounded-xl border-2 border-amber-500 bg-gradient-to-br from-amber-50 to-orange-50/80 p-5 shadow-sm ring-2 ring-amber-200/60"
+          role="alert"
+        >
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-base font-bold text-amber-950 mb-1 flex flex-wrap items-center gap-2">
+                가정·누락·주의 (SQL)
+                <span className="text-xs font-semibold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200">
+                  스키마 불충분·조인 불명확 시 반드시 확인
+                </span>
+              </h4>
+              <ul className="mt-2 space-y-2 text-sm text-amber-950 font-medium leading-relaxed">
+                {result.warnings!.map((warn, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-amber-600 font-bold shrink-0">{i + 1}.</span>
+                    <span className="break-words">{warn}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!sqlWarningBlock && hasWarnings && (
         <div className="mb-6 p-4 bg-amber-50 border-l-4 border-amber-500 text-amber-800 rounded-r-md flex gap-3">
           <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
             <h4 className="font-bold flex items-center mb-1">주의사항</h4>
             <ul className="list-disc ml-5 space-y-1 text-sm">
-              {result.warnings.map((warn, i) => (
+              {result.warnings!.map((warn, i) => (
                 <li key={i}>{warn}</li>
               ))}
             </ul>
@@ -140,8 +172,8 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
       )}
 
       <div className="space-y-8">
-        {result.taskType === 'flow' 
-          ? <FlowTaskView result={result} /> 
+        {result.taskType === 'flow'
+          ? <FlowTaskView result={result} />
           : <CodeTaskView result={result} isSql={result.taskType === 'sql'} />
         }
       </div>

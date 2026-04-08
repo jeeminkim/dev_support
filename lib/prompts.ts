@@ -1,4 +1,4 @@
-import { TaskType, DbType } from './types';
+import { TaskType, DbType, SqlStyleOptions } from './types';
 
 const baseJsonRule = (taskType: TaskType) => `
 [응답 포맷 강제]
@@ -18,19 +18,91 @@ const baseJsonRule = (taskType: TaskType) => `
   "warnings": ["주의사항 문자열 배열 (해당 시)"]
 }`;
 
+/** UI 체크박스 → LLM용 한 줄 힌트 */
+export function formatSqlStyleHints(opts: SqlStyleOptions): string {
+  const parts: string[] = [];
+  if (opts.readabilityFirst) parts.push('가독성 우선(alias·들여쓰기·줄바꿈)');
+  if (opts.performanceAware) parts.push('성능 고려(필터·조인 순서·인덱스 가정은 explanation에)');
+  if (opts.preferCte) parts.push('복잡 조건 시 CTE(WITH) 사용 선호');
+  return parts.length > 0 ? parts.join(' | ') : '(스타일 옵션 없음)';
+}
+
+export type SchemaCoverage = 'empty' | 'weak' | 'adequate';
+
 /**
- * SQL 사용자 메시지: DB 종류·스키마·요청을 분리해 LLM이 조인·alias를 맞추기 쉽게 한다.
+ * schemaContext 품질을 단순 휴리스틱으로 구분 (LLM 메타 지시용)
+ */
+export function assessSchemaCoverage(schemaContext: string): SchemaCoverage {
+  const s = schemaContext.trim();
+  if (s.length === 0) return 'empty';
+
+  const hasBracketSection = /\[목적\]|\[테이블\]|\[관계\]|\[조건\]|\[원하는 결과\]/i.test(s);
+  const looksLikeTables = /\([^)]*\w+[^)]*\)/.test(s) && /[,=]/.test(s);
+
+  if (hasBracketSection && s.length >= 100) return 'adequate';
+  if (hasBracketSection && s.length >= 50) return 'weak';
+  if (looksLikeTables && s.length >= 80) return 'adequate';
+  if (s.length >= 120) return 'weak';
+  return 'weak';
+}
+
+function schemaCoverageLabel(c: SchemaCoverage): string {
+  switch (c) {
+    case 'empty':
+      return 'EMPTY — 스키마 미제공. 존재하지 않는 테이블/컬럼을 만들지 말고, 반드시 가정을 warnings에 적어라.';
+    case 'weak':
+      return 'WEAK — 정보가 부족할 수 있음. 조인 키가 불명확하면 warnings에 명시하고, 가정은 warnings에 남겨라.';
+    case 'adequate':
+      return 'ADEQUATE — [SCHEMA]에 명시된 테이블·컬럼만 사용하고, 없는 객체를 추정해 넣지 마라.';
+  }
+}
+
+const dialectRules: Record<DbType, string> = {
+  postgresql:
+    'PostgreSQL: 표준 SQL + LIMIT/OFFSET, RETURNING, ::cast, 문자열은 단일인용부호, 날짜는 적절한 캐스팅.',
+  mysql:
+    'MySQL: LIMIT offset,count, 백틱으로 식별자 이스케이프(필요 시), 문자열 리터럴, 버전별 함수 차이는 explanation에 언급.',
+  oracle:
+    'Oracle: ROWNUM/ROW_NUMBER/FETCH FIRST, 날짜는 TO_DATE 등, 듀얼 테이블, (+) 조인은 가급적 표준 조인으로, 식별자 대소문자 규칙 주의.',
+};
+
+/**
+ * SQL 사용자 메시지: DB·스키마 상태·스타일·요청을 분리한다.
  */
 export function buildSqlUserPrompt(
   prompt: string,
   dbType: DbType,
-  schemaContext: string
+  schemaContext: string,
+  sqlStyleHints?: string
 ): string {
-  const schema =
+  const coverage = assessSchemaCoverage(schemaContext);
+  const schemaBlock =
     schemaContext.trim().length > 0
       ? schemaContext.trim()
-      : '(스키마 정보가 제공되지 않았습니다. 합리적인 가정으로 작성하세요.)';
-  return `[DB TYPE]\n${dbType}\n\n[SCHEMA]\n${schema}\n\n[REQUEST]\n${prompt.trim()}`;
+      : '(스키마 블록이 비어 있음 — 요청만으로 작성하되 가정은 warnings에)';
+
+  const styleLine =
+    typeof sqlStyleHints === 'string' && sqlStyleHints.trim().length > 0
+      ? sqlStyleHints.trim()
+      : '기본 스타일(가독성·명시적 조인)';
+
+  return `[SCHEMA 입력 상태]
+${schemaCoverageLabel(coverage)}
+
+[SQL STYLE PREFERENCES]
+${styleLine}
+
+[DB TYPE]
+${dbType}
+
+[DIALECT HINT]
+${dialectRules[dbType]}
+
+[SCHEMA]
+${schemaBlock}
+
+[REQUEST]
+${prompt.trim()}`;
 }
 
 export const getSystemPrompt = (taskType: TaskType): string => {
@@ -44,17 +116,30 @@ export const getSystemPrompt = (taskType: TaskType): string => {
 ${baseJsonRule(taskType)}`;
 
     case 'sql':
-      return `You are a senior SQL expert.
+      return `You are a senior SQL expert. Follow the user's labeled sections exactly.
 
-The user message will contain labeled sections: [DB TYPE], [SCHEMA], and [REQUEST].
-Use the schema and relationships when writing SQL. If schema is minimal, state reasonable assumptions in "warnings" if needed.
+Output contract (strict):
+- Put ONLY executable SQL in "content". No prose, no markdown fences inside "content".
+- Put design intent, assumptions, ambiguity notes, and performance considerations ONLY in "explanation".
+- Use "warnings" for: missing join keys, guessed columns, schema gaps, dialect caveats, and ANY assumption not explicitly in [SCHEMA].
 
-Rules:
-- Write JOIN conditions explicitly.
-- Use table/column aliases for readability.
-- Prefer readable, maintainable SQL.
-- Use WITH (CTE) when it improves clarity.
-- Put executable SQL in "content" and put design notes / performance notes in "explanation".
+Grounding rules:
+- Do NOT invent tables or columns that are not present in [SCHEMA] or clearly implied by the request. If you must assume, state the assumption in "warnings".
+- If join keys are unclear from [SCHEMA], say so in "warnings" and choose the safest join strategy you can justify in "explanation".
+- Classify the request mentally: aggregation vs detail list vs existence check — reflect that in SQL shape (GROUP BY vs selective columns vs EXISTS).
+
+Dialect:
+- Honor [DB TYPE] and [DIALECT HINT]. Apply PostgreSQL / MySQL / Oracle syntax differences strictly.
+
+Style:
+- Use consistent, short table aliases (e.g. c for customer).
+- Prefer readability; for many predicates or steps, CTEs (WITH) are allowed.
+- If [SCHEMA 입력 상태] is EMPTY or WEAK, you MUST include at least one warning about incomplete schema or assumptions.
+
+JSON fields reminder:
+- "content" = SQL only.
+- "explanation" = 의도·주의·성능·문맥(집계/상세/존재 여부 등).
+- "warnings" = 가정·불명확 조인·누락 정보.
 
 ${baseJsonRule(taskType)}`;
 

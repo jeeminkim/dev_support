@@ -6,6 +6,7 @@ import { getSettings, saveRecentResult } from '@/lib/storage';
 export type GenerateOptions = {
   dbType?: DbType;
   schemaContext?: string;
+  sqlStyleHints?: string;
 };
 
 export const useGenerate = () => {
@@ -48,6 +49,8 @@ export const useGenerate = () => {
         body.dbType = options?.dbType ?? 'postgresql';
         body.schemaContext =
           typeof options?.schemaContext === 'string' ? options.schemaContext : '';
+        body.sqlStyleHints =
+          typeof options?.sqlStyleHints === 'string' ? options.sqlStyleHints : '';
       }
 
       const res = await fetch('/api/generate', {
