@@ -5,39 +5,69 @@ import CodeBlock from './CodeBlock';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { logDevError } from '@/lib/utils';
 
+export type MermaidRenderState = {
+  ok: boolean;
+  svg: SVGSVGElement | null;
+};
+
 interface MermaidViewerProps {
   chart: string;
+  /** 렌더 성공 시 컨테이너 내 SVG 참조, 실패 시 ok=false */
+  onRenderStateChange?: (state: MermaidRenderState) => void;
 }
 
-export default function MermaidViewer({ chart }: MermaidViewerProps) {
+export default function MermaidViewer({ chart, onRenderStateChange }: MermaidViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const callbackRef = useRef(onRenderStateChange);
+
+  useEffect(() => {
+    callbackRef.current = onRenderStateChange;
+  });
+
   const [hasError, setHasError] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    
+
+    const notify = (state: MermaidRenderState) => {
+      callbackRef.current?.(state);
+    };
+
     const renderChart = async () => {
       setHasError(false);
+      notify({ ok: false, svg: null });
       try {
         mermaid.initialize({ startOnLoad: false, theme: 'default' });
         if (containerRef.current) {
           const { svg } = await mermaid.render(`mermaid-${Math.random().toString(36).substring(7)}`, chart);
           if (isMounted) {
             containerRef.current.innerHTML = svg;
+            queueMicrotask(() => {
+              if (!isMounted || !containerRef.current) return;
+              const svgEl = containerRef.current.querySelector('svg');
+              if (svgEl) {
+                notify({ ok: true, svg: svgEl });
+              } else {
+                notify({ ok: false, svg: null });
+              }
+            });
           }
         }
       } catch (error) {
         logDevError('Mermaid 렌더링 에러', error);
         if (isMounted) {
           setHasError(true);
-          setShowRaw(true); // 에러 발생 시 원문을 자동으로 펼침
+          setShowRaw(true);
+          notify({ ok: false, svg: null });
         }
       }
     };
 
     if (chart) {
       renderChart();
+    } else {
+      notify({ ok: false, svg: null });
     }
 
     return () => {
@@ -53,13 +83,13 @@ export default function MermaidViewer({ chart }: MermaidViewerProps) {
         </div>
       )}
 
-      {/* 렌더링 성공 시점에만 svg 컨테이너 노출 */}
       <div className={`bg-white p-6 rounded-md border border-slate-200 shadow-sm overflow-x-auto ${hasError ? 'hidden' : 'block'}`}>
         <div ref={containerRef} className="flex justify-center" />
       </div>
 
       <div>
         <button
+          type="button"
           onClick={() => setShowRaw(!showRaw)}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 transition-colors"
         >
