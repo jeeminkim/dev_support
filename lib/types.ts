@@ -47,4 +47,19 @@ export type RecentResult = {
   title: string;
   prompt: string;
   createdAt: string;
+  /** SQL 재현용 (선택) */
+  schemaContext?: string;
+  dbType?: DbType;
+  sqlStyleHints?: string;
+};
+
+/** 저장된 입력 템플릿 (SQL 옵션 포함) */
+export type SavedPromptTemplate = {
+  id: string;
+  name: string;
+  prompt: string;
+  schemaContext: string;
+  dbType: DbType;
+  sqlStyle: SqlStyleOptions;
+  createdAt: string;
 };

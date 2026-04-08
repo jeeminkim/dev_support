@@ -40,7 +40,7 @@ export default function SettingsModal({ isOpen, onClose, onDataCleared }: Settin
   };
 
   const handleClearAll = () => {
-    if (confirm('주의: 설정된 API Key, 초안, 최근 검색 이력, 피드백 등 모든 로컬 데이터가 영구히 삭제됩니다. 계속 진행하시겠습니까?')) {
+    if (confirm('주의: 설정된 API Key, 초안, 최근 검색 이력, 저장 템플릿, 피드백 등 모든 로컬 데이터가 영구히 삭제됩니다. 계속 진행하시겠습니까?')) {
       clearAllLocalData();
       setApiKey('');
       if (onDataCleared) onDataCleared();

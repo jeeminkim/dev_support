@@ -23,13 +23,37 @@ import {
   sanitizeFilename,
   buildFlowTextExport,
   downloadSvgAsPng,
+  extractFirstTsFunction,
 } from '@/lib/utils';
 import { saveFeedback } from '@/lib/storage';
+import { computeResultConfidence, type ConfidenceLevel } from '@/lib/confidence';
 
 interface ResultPanelProps {
   result: GenerateResponse;
   onFollowUp: (prompt: string) => void;
   isGenerating: boolean;
+  /** SQL 신뢰도 계산용: 마지막 생성 시 사용한 스키마 컨텍스트 */
+  inputSchemaContext?: string;
+}
+
+function confidenceBadgeClass(level: ConfidenceLevel): string {
+  switch (level) {
+    case 'HIGH':
+      return 'border-green-300 bg-green-100 text-green-900';
+    case 'MEDIUM':
+      return 'border-yellow-300 bg-yellow-100 text-yellow-900';
+    case 'LOW':
+      return 'border-red-300 bg-red-50 text-red-800';
+  }
+}
+
+async function copyToClipboard(text: string, okMessage: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    alert(okMessage);
+  } catch {
+    alert('복사에 실패했습니다.');
+  }
 }
 
 /** Flow 내보내기·시각화 분기 (taskType 정규화 후에도 안전하게) */
@@ -61,7 +85,9 @@ const FlowTaskView = ({
     )}
     {result.explanation && (
       <section>
-        <h3 className="text-lg font-semibold text-slate-800 mb-3">상세 설명</h3>
+        <h3 className="text-lg font-semibold text-slate-800 mb-3">
+          상세 설명 · 프로세스 요약
+        </h3>
         <div className="text-sm text-slate-600 bg-blue-50 p-5 rounded-md border border-blue-100 whitespace-pre-wrap leading-relaxed">
           {result.explanation}
         </div>
@@ -108,7 +134,12 @@ function flowExportBaseName(result: GenerateResponse): string {
 const exportBtnClass =
   'inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-bold transition-colors min-h-[2.5rem]';
 
-export default function ResultPanel({ result, onFollowUp, isGenerating }: ResultPanelProps) {
+export default function ResultPanel({
+  result,
+  onFollowUp,
+  isGenerating,
+  inputSchemaContext,
+}: ResultPanelProps) {
   const [followUpText, setFollowUpText] = useState('');
   const [feedback, setFeedback] = useState<'helpful' | 'notHelpful' | null>(null);
   const [mermaidState, setMermaidState] = useState<MermaidRenderState>({ ok: false, svg: null });
@@ -190,8 +221,62 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
   const hasWarnings = result.warnings && result.warnings.length > 0;
   const sqlWarningBlock = result.taskType === 'sql' && hasWarnings;
 
+  const confidence = computeResultConfidence(result, inputSchemaContext);
+
+  const handleCopyMermaid = () => {
+    if (!result.mermaidCode?.trim()) {
+      alert('복사할 Mermaid 코드가 없습니다.');
+      return;
+    }
+    void copyToClipboard(result.mermaidCode.trim(), 'Mermaid 코드가 복사되었습니다.');
+  };
+
+  const handleCopySqlOnly = () => {
+    if (!result.content?.trim()) {
+      alert('복사할 SQL이 없습니다.');
+      return;
+    }
+    void copyToClipboard(result.content.trim(), 'SQL만 복사되었습니다.');
+  };
+
+  const handleCopySqlAndWarningsNoExplanation = () => {
+    const parts: string[] = [];
+    if (result.content?.trim()) {
+      parts.push('-- SQL\n' + result.content.trim());
+    }
+    if (result.warnings?.length) {
+      parts.push(
+        '\n-- 경고\n' + result.warnings.map((w, i) => `${i + 1}. ${w}`).join('\n')
+      );
+    }
+    if (parts.length === 0) {
+      alert('복사할 내용이 없습니다.');
+      return;
+    }
+    void copyToClipboard(parts.join('\n'), 'SQL과 경고가 복사되었습니다. (explanation 제외)');
+  };
+
+  const handleCopyTsFunctionOnly = () => {
+    if (!result.content?.trim()) {
+      alert('복사할 코드가 없습니다.');
+      return;
+    }
+    const fn = extractFirstTsFunction(result.content);
+    void copyToClipboard(fn, '첫 함수 블록이 복사되었습니다.');
+  };
+
   return (
     <div className="mt-8 border-t border-slate-200 pt-8 animate-in fade-in duration-500">
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span
+          className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${confidenceBadgeClass(confidence.level)}`}
+          title={`${confidence.label} — ${confidence.detail}`}
+        >
+          {confidence.badgeShortKo}
+        </span>
+        <span className="text-xs text-slate-500 max-w-prose">{confidence.detail}</span>
+      </div>
 
       <div className="mb-6 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -233,6 +318,50 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
                 </button>
                 <button
                   type="button"
+                  onClick={handleCopyMermaid}
+                  disabled={!result.mermaidCode?.trim()}
+                  className={`${exportBtnClass} border-violet-300 bg-white text-violet-900 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <Copy className="h-4 w-4 shrink-0" />
+                  Mermaid 복사
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyMd}
+                  className={`${exportBtnClass} border-slate-300 bg-white text-slate-800 hover:bg-white`}
+                >
+                  <Copy className="h-4 w-4 shrink-0" />
+                  MD 복사
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportMd}
+                  className={`${exportBtnClass} border-slate-300 bg-white text-slate-800 hover:bg-slate-100`}
+                >
+                  <Download className="h-4 w-4 shrink-0" />
+                  MD 다운로드
+                </button>
+              </>
+            ) : result.taskType === 'sql' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCopySqlOnly}
+                  className={`${exportBtnClass} border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50`}
+                >
+                  <Copy className="h-4 w-4 shrink-0" />
+                  SQL만 복사
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopySqlAndWarningsNoExplanation}
+                  className={`${exportBtnClass} border-amber-300 bg-white text-amber-950 hover:bg-amber-50`}
+                >
+                  <ClipboardList className="h-4 w-4 shrink-0" />
+                  SQL+경고 (설명 제외)
+                </button>
+                <button
+                  type="button"
                   onClick={handleCopyMd}
                   className={`${exportBtnClass} border-slate-300 bg-white text-slate-800 hover:bg-white`}
                 >
@@ -250,6 +379,14 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
               </>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={handleCopyTsFunctionOnly}
+                  className={`${exportBtnClass} border-indigo-300 bg-white text-indigo-900 hover:bg-indigo-50`}
+                >
+                  <Copy className="h-4 w-4 shrink-0" />
+                  함수만 복사
+                </button>
                 <button
                   type="button"
                   onClick={handleCopyMd}

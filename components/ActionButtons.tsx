@@ -1,5 +1,4 @@
 "use client";
-import { useState } from 'react';
 import { TaskType, DbType } from '@/lib/types';
 import { Send, TerminalSquare, GitBranch, Table2 } from 'lucide-react';
 
@@ -8,6 +7,8 @@ interface ActionButtonsProps {
   isLoading: boolean;
   showSqlSchema: boolean;
   onToggleSqlSchema: () => void;
+  sqlDbType: DbType;
+  onSqlDbTypeChange: (db: DbType) => void;
 }
 
 const DB_LABEL: Record<DbType, string> = {
@@ -24,9 +25,9 @@ export default function ActionButtons({
   isLoading,
   showSqlSchema,
   onToggleSqlSchema,
+  sqlDbType,
+  onSqlDbTypeChange,
 }: ActionButtonsProps) {
-  const [dbType, setDbType] = useState<DbType>('postgresql');
-
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end sm:gap-4">
@@ -58,8 +59,8 @@ export default function ActionButtons({
           </div>
           <div className={`flex items-stretch gap-2 ${ACTION_H}`}>
             <select
-              value={dbType}
-              onChange={(e) => setDbType(e.target.value as DbType)}
+              value={sqlDbType}
+              onChange={(e) => onSqlDbTypeChange(e.target.value as DbType)}
               disabled={isLoading}
               className="h-full w-[7.5rem] shrink-0 rounded-md border border-slate-300 bg-white px-2 text-sm font-medium text-slate-800 shadow-sm outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
               aria-label="대상 DB"
@@ -72,7 +73,7 @@ export default function ActionButtons({
             </select>
             <button
               type="button"
-              onClick={() => onGenerate('sql', dbType)}
+              onClick={() => onGenerate('sql', sqlDbType)}
               disabled={isLoading}
               className="flex h-full min-w-0 flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:opacity-50"
             >

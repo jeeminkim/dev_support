@@ -1,4 +1,4 @@
-import { TaskType, DbType, SqlStyleOptions } from './types';
+import { TaskType, DbType, SqlStyleOptions, DEFAULT_SQL_STYLE_OPTIONS } from './types';
 
 const baseJsonRule = (taskType: TaskType) => `
 [응답 포맷 강제]
@@ -25,6 +25,17 @@ export function formatSqlStyleHints(opts: SqlStyleOptions): string {
   if (opts.performanceAware) parts.push('성능 고려(필터·조인 순서·인덱스 가정은 explanation에)');
   if (opts.preferCte) parts.push('복잡 조건 시 CTE(WITH) 사용 선호');
   return parts.length > 0 ? parts.join(' | ') : '(스타일 옵션 없음)';
+}
+
+/** localStorage에 저장된 `sqlStyleHints` 문자열 → 체크박스 상태 복원 */
+export function parseSqlStyleHintsToOptions(hints: string | undefined): SqlStyleOptions {
+  if (!hints?.trim()) return { ...DEFAULT_SQL_STYLE_OPTIONS };
+  const h = hints;
+  return {
+    readabilityFirst: h.includes('가독성'),
+    performanceAware: h.includes('성능'),
+    preferCte: h.includes('CTE'),
+  };
 }
 
 export type SchemaCoverage = 'empty' | 'weak' | 'adequate';
@@ -109,10 +120,20 @@ export const getSystemPrompt = (taskType: TaskType): string => {
   switch (taskType) {
     case 'flow':
       return `당신은 업무 프로세스 설계자다. 사용자의 요청을 분석하여 시스템 흐름도를 작성하라.
-- 프로세스 요약 및 핵심 흐름을 "content" 필드에 작성하라.
-- 상세한 단계적 설명은 "explanation" 필드에 작성하라.
-- Mermaid flowchart 코드를 작성하여 "mermaidCode" 필드에 담아라.
-- 단계별 업무 흐름, 분기 조건, 예외 흐름을 파악하여 구조화하라.
+
+[content — 프로세스 요약]
+- 핵심 흐름을 3~8줄로 요약하라.
+- 각 단계 앞에 번호를 붙여라 (예: 1. … 2. … 3. …).
+- 실패·예외·재시도·대체 경로(타임아웃, 검증 실패, 권한 거부 등)가 있으면 요약에 반드시 포함하라.
+
+[explanation — 상세]
+- "프로세스 요약" 소제목 아래에 위 요약과 동일한 관점의 한 단락 요약을 먼저 쓴 뒤, 그 아래에 단계별 상세 설명을 이어가라.
+- 정상 흐름과 예외/실패 흐름을 구분해 서술하라 (분기 조건, 롤백, 알림, 대체 처리).
+
+[mermaidCode]
+- Mermaid flowchart로 시각화하라. 단계 노드에 번호(1., 2., …)를 넣어 순서를 드러내라.
+- 실패·예외 분기는 별도 스타일(예: 노란색 클래스 또는 주석)으로 표현하거나 서브그래프로 분리하라.
+
 ${baseJsonRule(taskType)}`;
 
     case 'sql':

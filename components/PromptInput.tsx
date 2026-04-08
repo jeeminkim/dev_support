@@ -172,7 +172,7 @@ export default function PromptInput({
       <div className="relative mb-6">
         <label className="block text-sm font-bold text-slate-800 mb-2">요구사항 입력</label>
         <p className="text-xs text-slate-500 mb-2">
-          조회·집계·수정 목적과 조건을 적습니다. SQL은 아래 스키마 블록과 함께 쓰면 정확도가 올라갑니다.
+          조회·집계·수정 목적과 조건을 적습니다. SQL은 아래 스키마 블록과 함께 쓰면 정확도가 올라갑니다. 짧게만 적어도 내부적으로 보완 문구가 붙지만, 표준 포맷을 채우는 편이 안전합니다.
         </p>
         <textarea
           value={value}
@@ -193,10 +193,17 @@ export default function PromptInput({
             <Info className="w-4 h-4 shrink-0 mt-0.5 text-emerald-700" />
             <div className="space-y-1 leading-relaxed">
               <p className="font-semibold">SQL 정확도 팁</p>
-              <p>
-                테이블·컬럼·조인 키를 적으면 허구 객체 생성을 줄일 수 있습니다. [목적][테이블][관계][조건][원하는 결과] 형식을 권장합니다.
-                스키마가 비어 있으면 모델이 가정을 하며, 그 내용은 결과의 warnings에 나옵니다.
-              </p>
+              <ul className="list-disc pl-4 space-y-1">
+                <li>
+                  [테이블]에 PK/FK 후보 컬럼을 적고, [관계]에 조인 키를 명시하면 조인 추정 오류가 줄어듭니다.
+                </li>
+                <li>
+                  기간·상태 필터는 컬럼명과 값 형식(문자/숫자/날짜)을 함께 적으면 좋습니다. DB 종류(상단 대상 DB)에 맞는 날짜 함수를 쓰라고 요청할 수 있습니다.
+                </li>
+                <li>
+                  [목적][테이블][관계][조건][원하는 결과] 형식을 권장합니다. 스키마가 비어 있으면 가정이 warnings에 남습니다.
+                </li>
+              </ul>
             </div>
           </div>
 

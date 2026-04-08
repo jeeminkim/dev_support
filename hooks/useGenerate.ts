@@ -7,6 +7,8 @@ export type GenerateOptions = {
   dbType?: DbType;
   schemaContext?: string;
   sqlStyleHints?: string;
+  /** enrich 등으로 API body와 다를 때, 최근 이력에 넣을 원문 프롬프트 */
+  persistPrompt?: string;
 };
 
 export const useGenerate = () => {
@@ -69,10 +71,21 @@ export const useGenerate = () => {
 
       setResult(data);
 
+      const baseTitle = data.title || `${prompt.substring(0, 30)}...`;
+      const storedPrompt = options?.persistPrompt ?? prompt;
       saveRecentResult({
         taskType: data.taskType,
-        title: data.title || prompt.substring(0, 30) + '...',
-        prompt: prompt,
+        title: baseTitle,
+        prompt: storedPrompt,
+        ...(taskType === 'sql' && options
+          ? {
+              schemaContext:
+                typeof options.schemaContext === 'string' ? options.schemaContext : '',
+              dbType: options.dbType ?? 'postgresql',
+              sqlStyleHints:
+                typeof options.sqlStyleHints === 'string' ? options.sqlStyleHints : '',
+            }
+          : {}),
       });
 
     } catch (err: unknown) {

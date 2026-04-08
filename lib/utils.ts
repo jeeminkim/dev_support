@@ -176,3 +176,31 @@ export async function downloadSvgAsPng(
 export function downloadTextFileMarkdown(filename: string, text: string) {
   downloadTextFile(filename, text, 'text/markdown;charset=utf-8');
 }
+
+/**
+ * TypeScript 결과에서 첫 번째 함수 선언 블록만 추출 (복사용).
+ * 패턴이 없으면 전체 문자열을 반환한다.
+ */
+export function extractFirstTsFunction(source: string): string {
+  const s = source.trim();
+  if (!s) return s;
+
+  const decl =
+    /(?:^|\n)((?:export\s+)?(?:async\s+)?function\s+\w+\s*[<(])/.exec(s);
+  if (!decl || decl[1] === undefined) return s;
+
+  const from = decl.index + (decl[0].startsWith('\n') ? 1 : 0);
+  const brace = s.indexOf('{', from);
+  if (brace === -1) return s;
+
+  let depth = 0;
+  for (let i = brace; i < s.length; i++) {
+    const c = s[i];
+    if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return s.slice(from, i + 1);
+    }
+  }
+  return s;
+}

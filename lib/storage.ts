@@ -1,10 +1,13 @@
 import { logDevError } from './utils';
-import { RecentResult } from './types';
+import { RecentResult, SavedPromptTemplate } from './types';
 
 export const STORAGE_KEY_SETTINGS = 'dev_assistant_settings';
 export const STORAGE_KEY_DRAFT = 'dev_assistant_draft';
 export const STORAGE_KEY_RECENT = 'dev_assistant_recent';
 export const STORAGE_KEY_FEEDBACK = 'dev_assistant_feedback';
+export const STORAGE_KEY_TEMPLATES = 'dev_assistant_templates';
+
+const MAX_TEMPLATES = 30;
 
 export type Settings = {
   geminiApiKey: string;
@@ -115,4 +118,48 @@ export const clearAllLocalData = () => {
   localStorage.removeItem(STORAGE_KEY_DRAFT);
   localStorage.removeItem(STORAGE_KEY_RECENT);
   localStorage.removeItem(STORAGE_KEY_FEEDBACK);
+  localStorage.removeItem(STORAGE_KEY_TEMPLATES);
+};
+
+export const getSavedTemplates = (): SavedPromptTemplate[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_TEMPLATES);
+    if (!raw) return [];
+    return JSON.parse(raw) as SavedPromptTemplate[];
+  } catch (error) {
+    logDevError('템플릿 파싱 에러', error);
+    return [];
+  }
+};
+
+export const savePromptTemplate = (
+  entry: Omit<SavedPromptTemplate, 'id' | 'createdAt'>
+): SavedPromptTemplate | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const current = getSavedTemplates();
+    const newItem: SavedPromptTemplate = {
+      ...entry,
+      id: Math.random().toString(36).substring(2, 11),
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newItem, ...current].slice(0, MAX_TEMPLATES);
+    localStorage.setItem(STORAGE_KEY_TEMPLATES, JSON.stringify(updated));
+    return newItem;
+  } catch (error) {
+    logDevError('템플릿 저장 에러', error);
+    return null;
+  }
+};
+
+export const deletePromptTemplate = (id: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const current = getSavedTemplates();
+    const next = current.filter((t) => t.id !== id);
+    localStorage.setItem(STORAGE_KEY_TEMPLATES, JSON.stringify(next));
+  } catch (error) {
+    logDevError('템플릿 삭제 에러', error);
+  }
 };

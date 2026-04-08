@@ -5,11 +5,26 @@ import PromptInput from '@/components/PromptInput';
 import ActionButtons from '@/components/ActionButtons';
 import ResultPanel from '@/components/ResultPanel';
 import SettingsModal from '@/components/SettingsModal';
-import { getSettings, saveDraft, getDraft, getRecentResults } from '@/lib/storage';
-import { TaskType, DbType, RecentResult, DEFAULT_SQL_STYLE_OPTIONS, SqlStyleOptions } from '@/lib/types';
-import { Settings as SettingsIcon, Code2, AlertTriangle, History, Clock } from 'lucide-react';
-import { buildFollowUpPrompt, FOLLOW_UP_MAX_COUNT } from '@/lib/utils/promptUtils';
-import { formatSqlStyleHints } from '@/lib/prompts';
+import {
+  getSettings,
+  saveDraft,
+  getDraft,
+  getRecentResults,
+  getSavedTemplates,
+  savePromptTemplate,
+  deletePromptTemplate,
+} from '@/lib/storage';
+import {
+  TaskType,
+  DbType,
+  RecentResult,
+  DEFAULT_SQL_STYLE_OPTIONS,
+  SqlStyleOptions,
+  SavedPromptTemplate,
+} from '@/lib/types';
+import { Settings as SettingsIcon, Code2, AlertTriangle, History, Clock, BookmarkPlus, Trash2 } from 'lucide-react';
+import { buildFollowUpPrompt, FOLLOW_UP_MAX_COUNT, enrichSqlPromptIfShort } from '@/lib/utils/promptUtils';
+import { formatSqlStyleHints, parseSqlStyleHintsToOptions } from '@/lib/prompts';
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
@@ -19,7 +34,10 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [recentTasks, setRecentTasks] = useState<RecentResult[]>([]);
+  const [savedTemplates, setSavedTemplates] = useState<SavedPromptTemplate[]>([]);
+  const [templateNameDraft, setTemplateNameDraft] = useState('');
 
+  const [sqlDbType, setSqlDbType] = useState<DbType>('postgresql');
   const [lastDbType, setLastDbType] = useState<DbType>('postgresql');
   const [lastSchemaContext, setLastSchemaContext] = useState('');
   const [lastSqlStyleHints, setLastSqlStyleHints] = useState('');
@@ -36,6 +54,7 @@ export default function Home() {
       }
 
       setRecentTasks(getRecentResults());
+      setSavedTemplates(getSavedTemplates());
 
       const settings = getSettings();
       if (!settings.geminiApiKey) {
@@ -57,8 +76,10 @@ export default function Home() {
     setPrompt('');
     setSchemaContext('');
     setSqlStyle(DEFAULT_SQL_STYLE_OPTIONS);
+    setSqlDbType('postgresql');
     setShowSqlSchema(false);
     setRecentTasks([]);
+    setSavedTemplates(getSavedTemplates());
     setFollowUpCount(0);
   };
 
@@ -70,13 +91,65 @@ export default function Home() {
       setLastDbType(resolvedDb);
       setLastSchemaContext(schemaContext);
       setLastSqlStyleHints(hints);
-      generate(prompt, type, {
+      const apiPrompt = enrichSqlPromptIfShort(prompt);
+      generate(apiPrompt, type, {
         dbType: resolvedDb,
         schemaContext,
         sqlStyleHints: hints,
+        persistPrompt: prompt,
       });
     } else {
       generate(prompt, type);
+    }
+  };
+
+  const handleSaveTemplate = () => {
+    const name = templateNameDraft.trim() || `템플릿 ${new Date().toLocaleString('ko-KR')}`;
+    const saved = savePromptTemplate({
+      name,
+      prompt,
+      schemaContext,
+      dbType: sqlDbType,
+      sqlStyle,
+    });
+    if (saved) {
+      setSavedTemplates(getSavedTemplates());
+      setTemplateNameDraft('');
+      alert('현재 입력이 템플릿으로 저장되었습니다.');
+    } else {
+      alert('저장에 실패했습니다.');
+    }
+  };
+
+  const applyTemplate = (t: SavedPromptTemplate) => {
+    setPrompt(t.prompt);
+    setSchemaContext(t.schemaContext);
+    setSqlStyle(t.sqlStyle);
+    setSqlDbType(t.dbType);
+    setLastDbType(t.dbType);
+    setLastSqlStyleHints(formatSqlStyleHints(t.sqlStyle));
+    setLastSchemaContext(t.schemaContext);
+    setShowSqlSchema(true);
+    setFollowUpCount(0);
+  };
+
+  const handleRecentClick = (task: RecentResult) => {
+    setPrompt(task.prompt);
+    setFollowUpCount(0);
+    if (task.taskType === 'sql') {
+      setShowSqlSchema(true);
+      if (typeof task.schemaContext === 'string') {
+        setSchemaContext(task.schemaContext);
+        setLastSchemaContext(task.schemaContext);
+      }
+      if (task.dbType) {
+        setLastDbType(task.dbType);
+        setSqlDbType(task.dbType);
+      }
+      if (task.sqlStyleHints) {
+        setLastSqlStyleHints(task.sqlStyleHints);
+        setSqlStyle(parseSqlStyleHintsToOptions(task.sqlStyleHints));
+      }
     }
   };
 
@@ -90,10 +163,12 @@ export default function Home() {
 
     setPrompt(newPrompt);
     if (result.taskType === 'sql') {
-      generate(newPrompt, result.taskType, {
+      const apiPrompt = enrichSqlPromptIfShort(newPrompt);
+      generate(apiPrompt, result.taskType, {
         dbType: lastDbType,
         schemaContext: lastSchemaContext,
         sqlStyleHints: lastSqlStyleHints,
+        persistPrompt: newPrompt,
       });
     } else {
       generate(newPrompt, result.taskType);
@@ -148,7 +223,64 @@ export default function Home() {
                   isLoading={isLoading}
                   showSqlSchema={showSqlSchema}
                   onToggleSqlSchema={() => setShowSqlSchema((v) => !v)}
+                  sqlDbType={sqlDbType}
+                  onSqlDbTypeChange={setSqlDbType}
                 />
+
+                <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex-1 min-w-[140px]">
+                      <label className="block text-xs font-bold text-slate-600 mb-1">템플릿 이름 (선택)</label>
+                      <input
+                        type="text"
+                        value={templateNameDraft}
+                        onChange={(e) => setTemplateNameDraft(e.target.value)}
+                        placeholder="예: 미납 조회·주문 집계"
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveTemplate}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-3 py-2 text-xs font-bold text-blue-900 hover:bg-blue-50"
+                    >
+                      <BookmarkPlus className="w-4 h-4" />
+                      현재 입력 저장
+                    </button>
+                  </div>
+                  {savedTemplates.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-500 mb-2">저장된 템플릿</p>
+                      <ul className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                        {savedTemplates.map((t) => (
+                          <li
+                            key={t.id}
+                            className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => applyTemplate(t)}
+                              className="flex-1 text-left font-medium text-slate-800 hover:text-blue-700 truncate"
+                            >
+                              {t.name}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                deletePromptTemplate(t.id);
+                                setSavedTemplates(getSavedTemplates());
+                              }}
+                              className="shrink-0 p-1 text-slate-400 hover:text-red-600"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -178,7 +310,12 @@ export default function Home() {
             )}
 
             {!isLoading && result && (
-              <ResultPanel result={result} onFollowUp={handleFollowUp} isGenerating={isLoading} />
+              <ResultPanel
+                result={result}
+                onFollowUp={handleFollowUp}
+                isGenerating={isLoading}
+                inputSchemaContext={result.taskType === 'sql' ? lastSchemaContext : undefined}
+              />
             )}
           </div>
 
@@ -196,10 +333,7 @@ export default function Home() {
                     <button
                       key={task.id}
                       type="button"
-                      onClick={() => {
-                        setPrompt(task.prompt);
-                        setFollowUpCount(0);
-                      }}
+                      onClick={() => handleRecentClick(task)}
                       className="w-full text-left p-4 hover:bg-slate-50 transition-colors focus:bg-blue-50 focus:outline-none block group"
                     >
                       <div className="flex items-center gap-2 mb-1.5">
