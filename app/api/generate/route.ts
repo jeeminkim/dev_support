@@ -25,13 +25,15 @@ export async function POST(req: Request) {
     const result = await provider.generate(body);
     
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error instanceof ApiError) {
       logDevError(`Route Handler ApiError [${error.statusCode}]: ${error.message}`);
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
     }
 
     logDevError('Route Handler Internal Error', error);
-    return NextResponse.json({ error: error.message || '서버 내부 오류가 발생했습니다.' }, { status: 500 });
+    const message =
+      error instanceof Error ? error.message : '서버 내부 오류가 발생했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

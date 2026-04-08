@@ -22,18 +22,20 @@ export default function Home() {
   const { generate, isLoading, error, result } = useGenerate();
 
   useEffect(() => {
-    setIsReady(true);
-    const savedDraft = getDraft();
-    if (savedDraft) {
-      setPrompt(savedDraft);
-    }
-    
-    setRecentTasks(getRecentResults());
+    queueMicrotask(() => {
+      setIsReady(true);
+      const savedDraft = getDraft();
+      if (savedDraft) {
+        setPrompt(savedDraft);
+      }
 
-    const settings = getSettings();
-    if (!settings.geminiApiKey) {
-      setIsSettingsOpen(true);
-    }
+      setRecentTasks(getRecentResults());
+
+      const settings = getSettings();
+      if (!settings.geminiApiKey) {
+        setIsSettingsOpen(true);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -42,9 +44,8 @@ export default function Home() {
 
   // 새로운 결과 생성될 때마다 최근 기록 Refresh
   useEffect(() => {
-    if (result) {
-      setRecentTasks(getRecentResults());
-    }
+    if (!result) return;
+    queueMicrotask(() => setRecentTasks(getRecentResults()));
   }, [result]);
 
   const handleDataCleared = () => {

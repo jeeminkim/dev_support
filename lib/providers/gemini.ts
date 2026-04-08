@@ -42,8 +42,10 @@ export class GeminiProvider implements Provider {
       const parsed = extractJsonObject(text);
       return normalizeGenerateResponse(parsed, taskType);
 
-    } catch (error: any) {
-      logDevError('GeminiProvider 처리 에러 (StatusCode 포함)', error?.statusCode || 500, error);
+    } catch (error: unknown) {
+      const status =
+        error instanceof ApiError ? error.statusCode : 500;
+      logDevError('GeminiProvider 처리 에러 (StatusCode 포함)', status, error);
       if (error instanceof ApiError) throw error;
       throw new ApiError('네트워크 또는 알 수 없는 오류가 발생했습니다.', 500);
     }

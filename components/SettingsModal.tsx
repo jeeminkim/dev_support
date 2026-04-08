@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Settings, getSettings, saveSettings, clearDraft, clearRecentResults, clearAllLocalData } from '@/lib/storage';
+import { getSettings, saveSettings, clearDraft, clearRecentResults, clearAllLocalData } from '@/lib/storage';
 import { X, KeyRound, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -14,9 +14,8 @@ export default function SettingsModal({ isOpen, onClose, onDataCleared }: Settin
   const [apiKey, setApiKey] = useState('');
 
   useEffect(() => {
-    if (isOpen) {
-      setApiKey(getSettings().geminiApiKey);
-    }
+    if (!isOpen) return;
+    queueMicrotask(() => setApiKey(getSettings().geminiApiKey));
   }, [isOpen]);
 
   const handleSave = () => {

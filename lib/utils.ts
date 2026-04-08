@@ -10,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-export function logDevError(message: string, ...optionalParams: any[]) {
+export function logDevError(message: string, ...optionalParams: unknown[]) {
   if (process.env.NODE_ENV !== 'production') {
     console.error(message, ...optionalParams);
   }
