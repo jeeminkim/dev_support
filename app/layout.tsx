@@ -13,8 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "dev_support",
-  description: "자연어로 순서도, SQL, TypeScript 초안을 생성하는 개발 보조 도구",
+  title: {
+    default: "dev_support",
+    template: "%s · dev_support",
+  },
+  description:
+    "dev_support — 자연어로 순서도(Mermaid), SQL, TypeScript 초안을 생성하는 개발 보조 도구",
 };
 
 export default function RootLayout({

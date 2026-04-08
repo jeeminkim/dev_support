@@ -32,6 +32,11 @@ interface ResultPanelProps {
   isGenerating: boolean;
 }
 
+/** Flow 내보내기·시각화 분기 (taskType 정규화 후에도 안전하게) */
+function isFlowResult(r: GenerateResponse): boolean {
+  return r.taskType === 'flow';
+}
+
 const FlowTaskView = ({
   result,
   onMermaidRenderState,
@@ -100,6 +105,9 @@ function flowExportBaseName(result: GenerateResponse): string {
   return `flow_result_${dateStr}`;
 }
 
+const exportBtnClass =
+  'inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-bold transition-colors min-h-[2.5rem]';
+
 export default function ResultPanel({ result, onFollowUp, isGenerating }: ResultPanelProps) {
   const [followUpText, setFollowUpText] = useState('');
   const [feedback, setFeedback] = useState<'helpful' | 'notHelpful' | null>(null);
@@ -112,9 +120,10 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
 
   useEffect(() => {
     setMermaidState({ ok: false, svg: null });
-  }, [result]);
+  }, [result.taskType, result.title, result.mermaidCode, result.content]);
 
-  const flowPngReady = result.taskType === 'flow' && mermaidState.ok && mermaidState.svg !== null;
+  const flowPngReady = isFlowResult(result) && mermaidState.ok && mermaidState.svg !== null;
+  const isFlow = isFlowResult(result);
 
   const submitFollowUp = () => {
     if (!followUpText.trim()) return;
@@ -125,7 +134,7 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
   const handleExportMd = () => {
     const md = formatResultAsMarkdown(result);
     const sanitizedTitle = (result.title || 'task_result').replace(/[\/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
-    downloadTextFileMarkdown(`kdev_${sanitizedTitle}.md`, md);
+    downloadTextFileMarkdown(`dev_support_${sanitizedTitle}.md`, md);
   };
 
   const handleExportFlowTxt = () => {
@@ -184,8 +193,8 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
   return (
     <div className="mt-8 border-t border-slate-200 pt-8 animate-in fade-in duration-500">
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="mb-6 space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
           {result.title && <h2 className="text-xl font-bold text-slate-800">{result.title}</h2>}
           {result.provider && (
             <div className="flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 text-xs font-semibold rounded-full border border-purple-100">
@@ -195,48 +204,75 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleCopyMd}
-            className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-md transition-colors"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            MD 복사
-          </button>
-          <button
-            type="button"
-            onClick={handleExportMd}
-            className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-md transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            MD 다운로드
-          </button>
-          {result.taskType === 'flow' && (
-            <>
-              <button
-                type="button"
-                onClick={handleExportFlowTxt}
-                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-800 text-xs font-bold rounded-md transition-colors"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                TXT 저장
-              </button>
-              <button
-                type="button"
-                onClick={handleExportFlowPng}
-                disabled={!flowPngReady || pngExporting}
-                title={
-                  flowPngReady
-                    ? '현재 화면의 Mermaid 다이어그램을 PNG로 저장'
-                    : 'Mermaid가 정상 렌더된 경우에만 사용할 수 있습니다'
-                }
-                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-800 text-xs font-bold rounded-md transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
-              >
-                <ImageDown className="w-3.5 h-3.5" />
-                {pngExporting ? 'PNG…' : 'PNG 저장'}
-              </button>
-            </>
+        <div className="rounded-xl border-2 border-slate-200 bg-slate-50/90 p-4 shadow-sm">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-600">결과 내보내기</p>
+          <div className="flex flex-wrap gap-2">
+            {isFlow ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportFlowPng}
+                  disabled={!flowPngReady || pngExporting}
+                  title={
+                    flowPngReady
+                      ? '현재 화면의 Mermaid 다이어그램을 PNG로 저장'
+                      : '다이어그램이 그려진 뒤 활성화됩니다'
+                  }
+                  className={`${exportBtnClass} border-blue-300 bg-white text-blue-900 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-55`}
+                >
+                  <ImageDown className="h-4 w-4 shrink-0" />
+                  {pngExporting ? 'PNG 저장 중…' : 'PNG 저장'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportFlowTxt}
+                  className={`${exportBtnClass} border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50`}
+                >
+                  <FileText className="h-4 w-4 shrink-0" />
+                  TXT 저장
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyMd}
+                  className={`${exportBtnClass} border-slate-300 bg-white text-slate-800 hover:bg-white`}
+                >
+                  <Copy className="h-4 w-4 shrink-0" />
+                  MD 복사
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportMd}
+                  className={`${exportBtnClass} border-slate-300 bg-white text-slate-800 hover:bg-slate-100`}
+                >
+                  <Download className="h-4 w-4 shrink-0" />
+                  MD 다운로드
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCopyMd}
+                  className={`${exportBtnClass} border-slate-300 bg-white text-slate-800 hover:bg-white`}
+                >
+                  <Copy className="h-4 w-4 shrink-0" />
+                  MD 복사
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportMd}
+                  className={`${exportBtnClass} border-slate-300 bg-white text-slate-800 hover:bg-slate-100`}
+                >
+                  <Download className="h-4 w-4 shrink-0" />
+                  MD 다운로드
+                </button>
+              </>
+            )}
+          </div>
+          {isFlow && !flowPngReady && (
+            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+              PNG 저장은 Mermaid 다이어그램이 화면에 그려진 뒤 활성화됩니다. TXT·MD는 바로 사용할 수 있습니다.
+            </p>
           )}
         </div>
       </div>
@@ -267,7 +303,7 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
                   경고 전체 복사
                 </button>
               </div>
-              <pre className="mb-3 whitespace-pre-wrap rounded-md border border-amber-200/80 bg-white/90 p-3 text-xs font-mono text-amber-950 leading-relaxed">
+              <pre className="mb-3 select-all whitespace-pre-wrap rounded-md border border-amber-200/80 bg-white/90 p-3 text-xs font-mono text-amber-950 leading-relaxed">
                 {result.warnings!.map((w, i) => `${i + 1}. ${w}`).join('\n\n')}
               </pre>
               <ul className="space-y-2 text-sm text-amber-950 font-medium leading-relaxed">
@@ -306,7 +342,7 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
                 복사
               </button>
             </div>
-            <pre className="mb-2 whitespace-pre-wrap rounded bg-white/60 p-2 text-xs font-mono">
+            <pre className="mb-2 select-all whitespace-pre-wrap rounded bg-white/60 p-2 text-xs font-mono">
               {result.warnings!.map((w, i) => `${i + 1}. ${w}`).join('\n\n')}
             </pre>
             <ul className="list-disc ml-5 space-y-1 text-sm">
@@ -319,7 +355,7 @@ export default function ResultPanel({ result, onFollowUp, isGenerating }: Result
       )}
 
       <div className="space-y-8">
-        {result.taskType === 'flow' ? (
+        {isFlow ? (
           <FlowTaskView result={result} onMermaidRenderState={handleMermaidRenderState} />
         ) : (
           <CodeTaskView result={result} isSql={result.taskType === 'sql'} />

@@ -16,6 +16,9 @@ const DB_LABEL: Record<DbType, string> = {
   oracle: 'Oracle',
 };
 
+/** 주요 액션 버튼 공통 높이 (SQL 그룹 내 행과 맞춤) */
+const ACTION_H = 'h-14 min-h-[3.5rem]';
+
 export default function ActionButtons({
   onGenerate,
   isLoading,
@@ -26,35 +29,39 @@ export default function ActionButtons({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap md:flex-nowrap gap-3 items-end">
-        <button
-          type="button"
-          onClick={() => onGenerate('flow')}
-          disabled={isLoading}
-          className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-        >
-          <GitBranch className="w-5 h-5" />
-          순서도 생성
-        </button>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end sm:gap-4">
+        <div className="flex flex-col justify-end sm:min-h-[5.5rem]">
+          <button
+            type="button"
+            onClick={() => onGenerate('flow')}
+            disabled={isLoading}
+            className={`w-full ${ACTION_H} rounded-md bg-blue-600 px-4 text-white font-semibold shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2`}
+          >
+            <GitBranch className="h-5 w-5 shrink-0" />
+            순서도 생성
+          </button>
+        </div>
 
-        <div className="flex-1 min-w-[200px] flex flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-2 min-h-[18px]">
-            <label className="text-[11px] font-bold text-slate-500">대상 DB</label>
+        <div className="flex flex-col justify-end gap-1.5 sm:min-h-[5.5rem]">
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              대상 DB
+            </span>
             <button
               type="button"
               onClick={onToggleSqlSchema}
               disabled={isLoading}
-              className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 underline-offset-2 hover:underline disabled:opacity-50"
+              className="text-[11px] font-semibold text-emerald-700 underline-offset-2 hover:text-emerald-900 hover:underline disabled:opacity-50"
             >
-              {showSqlSchema ? '스키마 입력 닫기' : '스키마 입력'}
+              {showSqlSchema ? '스키마 닫기' : '스키마 입력'}
             </button>
           </div>
-          <div className="flex gap-2">
+          <div className={`flex items-stretch gap-2 ${ACTION_H}`}>
             <select
               value={dbType}
               onChange={(e) => setDbType(e.target.value as DbType)}
               disabled={isLoading}
-              className="flex-none min-w-[7.5rem] px-2 py-3 border border-slate-300 rounded-md bg-white text-sm focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50"
+              className="h-full w-[7.5rem] shrink-0 rounded-md border border-slate-300 bg-white px-2 text-sm font-medium text-slate-800 shadow-sm outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
               aria-label="대상 DB"
             >
               {(Object.keys(DB_LABEL) as DbType[]).map((key) => (
@@ -67,32 +74,31 @@ export default function ActionButtons({
               type="button"
               onClick={() => onGenerate('sql', dbType)}
               disabled={isLoading}
-              className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-md disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-w-0"
+              className="flex h-full min-w-0 flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:opacity-50"
             >
-              <TerminalSquare className="w-5 h-5 shrink-0" />
+              <TerminalSquare className="h-5 w-5 shrink-0" />
               <span className="truncate">SQL 생성</span>
-              <span className="text-emerald-100 text-xs font-normal hidden sm:inline">
-                · {DB_LABEL[dbType]}
-              </span>
             </button>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onGenerate('ts')}
-          disabled={isLoading}
-          className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-        >
-          <Send className="w-5 h-5" />
-          TypeScript 생성
-        </button>
+        <div className="flex flex-col justify-end sm:min-h-[5.5rem]">
+          <button
+            type="button"
+            onClick={() => onGenerate('ts')}
+            disabled={isLoading}
+            className={`w-full ${ACTION_H} rounded-md bg-indigo-600 px-4 text-white font-semibold shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2`}
+          >
+            <Send className="h-5 w-5 shrink-0" />
+            TypeScript 생성
+          </button>
+        </div>
       </div>
 
       {showSqlSchema && (
-        <p className="flex items-start gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-md px-3 py-2">
-          <Table2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
-          위에서 &quot;스키마 입력&quot;을 연 상태면 테이블·조인 정보가 SQL 프롬프트에 포함됩니다.
+        <p className="flex items-start gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          <Table2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          스키마 입력이 켜져 있으면 테이블·조인 정보가 SQL 프롬프트에 포함됩니다.
         </p>
       )}
     </div>

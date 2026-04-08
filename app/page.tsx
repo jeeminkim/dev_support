@@ -129,7 +129,7 @@ export default function Home() {
               <div className="space-y-1 mb-8 border-b border-slate-100 pb-5">
                 <h2 className="text-2xl font-bold text-slate-800">새 작업 시작</h2>
                 <p className="text-sm text-slate-500 max-w-xl">
-                  자연어로 업무를 설명하면 순서도(Mermaid), SQL, TypeScript 초안을 만듭니다. SQL은 스키마·조인·옵션을 맞추면 실무에 가깝게 나옵니다.
+                  dev_support는 자연어 업무 설명으로 순서도(Mermaid), SQL, TypeScript 초안을 만듭니다. SQL은 스키마·조인·옵션을 맞추면 실무에 가깝게 나옵니다.
                 </p>
               </div>
 

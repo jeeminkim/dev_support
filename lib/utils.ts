@@ -24,7 +24,7 @@ export function sanitizeFilename(name: string, maxLen = 80): string {
 }
 
 export function formatResultAsMarkdown(result: GenerateResponse): string {
-  let md = `# K-Dev Assistant Result\n\n`;
+  let md = `# dev_support\n\n`;
   if (result.title) md += `## ${result.title}\n\n`;
   md += `- Task Type: ${result.taskType}\n`;
   if (result.provider) md += `- Provider: ${result.provider}\n`;

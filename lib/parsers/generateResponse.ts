@@ -40,9 +40,11 @@ export function normalizeGenerateResponse(
   const obj = isRecord(parsed) ? parsed : {};
 
   const rawTaskType = obj.taskType;
+  const normalized =
+    typeof rawTaskType === 'string' ? rawTaskType.trim().toLowerCase() : '';
   const parsedTaskType: TaskType =
-    rawTaskType === 'flow' || rawTaskType === 'sql' || rawTaskType === 'ts'
-      ? rawTaskType
+    normalized === 'flow' || normalized === 'sql' || normalized === 'ts'
+      ? (normalized as TaskType)
       : requestedTaskType;
 
   const rawContent = obj.content;
